@@ -111,11 +111,28 @@ def main():
     files = {name: args.csv_dir / f"{name}.csv" for name in TABLES}
     headers = {name: read_header(path) for name, path in files.items()}
 
-    from mssql_python import connect
+    import pyodbc
+
+    installed_drivers = pyodbc.drivers()
+    driver = next(
+        (
+            name for name in (
+                "ODBC Driver 17 for SQL Server",
+                "ODBC Driver 18 for SQL Server",
+            )
+            if name in installed_drivers
+        ),
+        None,
+    )
+    if driver is None:
+        raise RuntimeError(
+            "Installa Microsoft ODBC Driver 17 o 18 for SQL Server "
+            "per l'architettura del tuo Python."
+        )
 
     password = "{" + getpass("Password SQL del gruppo: ").replace("}", "}}") + "}"
-    connection = connect(
-        f"Server={SERVER};Database={DATABASE};UID={LOGIN};PWD={password};"
+    connection = pyodbc.connect(
+        f"DRIVER={{{driver}}};SERVER=tcp:{SERVER};DATABASE={DATABASE};UID={LOGIN};PWD={password};"
         "Encrypt=yes;TrustServerCertificate=no;",
         autocommit=False,
     )
@@ -126,6 +143,7 @@ def main():
         if not args.load:
             print("Controllo completato. Esegui con --load per caricare i dati.")
             return
+        cursor.fast_executemany = True
 
         expected = {}
         for table, path in files.items():
