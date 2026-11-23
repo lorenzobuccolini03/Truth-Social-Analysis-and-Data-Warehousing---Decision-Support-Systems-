@@ -38,34 +38,26 @@ def convert_value(column, value):
 def execute_batches(cursor, sql, rows):
     rows = iter(rows)
     total = 0
+
     while batch := list(islice(rows, BATCH_SIZE)):
         cursor.executemany(sql, batch)
         total += len(batch)
+
     return total
 
 
 def load_table(cursor, table, path):
     with path.open(encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
-        columns = [
-            name for name in reader.fieldnames
-            if table != "DimPost" or name != "RetruthedPostKey"
-        ]
+        columns = reader.fieldnames
+
         names = ", ".join(f"[{name.replace(']', ']]')}]" for name in columns)
         parameters = ", ".join("?" for _ in columns)
         sql = f"INSERT INTO dbo.[{table}_python] ({names}) VALUES ({parameters})"
-        rows = (tuple(convert_value(col, row[col]) for col in columns) for row in reader)
-        return execute_batches(cursor, sql, rows)
 
-
-def link_retruths(cursor, path):
-    # Tutti i post esistono gia, anche quelli citati piu avanti nel CSV.
-    sql = "UPDATE dbo.DimPost_python SET RetruthedPostKey = ? WHERE PostKey = ?"
-    with path.open(encoding="utf-8-sig", newline="") as file:
         rows = (
-            (int(row["RetruthedPostKey"]), int(row["PostKey"]))
-            for row in csv.DictReader(file)
-            if row["RetruthedPostKey"]
+            tuple(convert_value(column, row[column]) for column in columns)
+            for row in reader
         )
         return execute_batches(cursor, sql, rows)
 
@@ -90,10 +82,12 @@ def main():
         f"UID={USERNAME};PWD={{{password}}};Encrypt=yes;TrustServerCertificate=no;"
     )
     connection = pyodbc.connect(connection_string, autocommit=False)
+
     try:
         cursor = connection.cursor()
         cursor.execute("SELECT DB_NAME()")
         print(f"Connesso a {cursor.fetchone()[0]}.", flush=True)
+
         if not args.load:
             print("Connessione riuscita. Aggiungi --load per caricare i CSV.")
             return
@@ -101,26 +95,27 @@ def main():
         cursor.execute("SET XACT_ABORT ON")
 
         for table in TABLES:
-            cursor.execute(f"SELECT TOP (1) 1 FROM dbo.[{table}_python] WITH (TABLOCKX, HOLDLOCK)")
+            cursor.execute(
+                f"SELECT TOP (1) 1 FROM dbo.[{table}_python] WITH (TABLOCKX, HOLDLOCK)"
+            )
             if cursor.fetchone() is not None:
                 raise RuntimeError(f"{table}_python contiene gia dati. Caricamento interrotto.")
 
         cursor.fast_executemany = True
+
         for table in TABLES:
             print(f"Caricamento di {table}_python...", flush=True)
             path = args.csv_dir / f"{table}.csv"
             count = load_table(cursor, table, path)
             print(f"{count:,} righe inviate.", flush=True)
 
-            if table == "DimPost":
-                count = link_retruths(cursor, path)
-                print(f"{count:,} riferimenti ai repost impostati.", flush=True)
-
         connection.commit()
         print("Caricamento confermato.")
+
     except (Exception, KeyboardInterrupt):
         connection.rollback()
         raise
+
     finally:
         connection.close()
 
