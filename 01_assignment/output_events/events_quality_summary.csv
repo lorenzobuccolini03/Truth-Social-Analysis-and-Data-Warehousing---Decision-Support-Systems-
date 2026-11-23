@@ -1,0 +1,9 @@
+Check,Count
+Original rows,716643
+Cleaned rows,716643
+Identical events removed,0
+Unknown actors remaining,106949
+Recovered creation actors,0
+Unresolved post references,3564
+Unresolved cross-source identities,0
+Event-before-post flags,1011

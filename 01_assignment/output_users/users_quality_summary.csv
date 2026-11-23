@@ -1,0 +1,10 @@
+Column,Original sentinel -1,Final missing,Final missing (%)
+id_user,0,0,0.0
+timestamp_user_creation,465337,465337,95.49
+username,18,18,0.0
+follower_count,465337,465337,95.49
+following_count,465337,465337,95.49
+profile_url,0,18,0.0
+finished_follower_scrape,465337,465337,95.49
+finished_following_scrape,465337,465337,95.49
+finished_truth_scrape,465337,465337,95.49
