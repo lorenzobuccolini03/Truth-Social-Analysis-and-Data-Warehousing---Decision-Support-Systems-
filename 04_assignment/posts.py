@@ -4,11 +4,10 @@ from urllib.parse import urlsplit
 
 
 POST_COLUMNS = (
-    "PostKey", "IntegratedPostID", "PostAuthorUserKey",
+    "PostKey", "IntegratedPostID", "SourceAuthorID",
     "PublicationDate", "PublicationTime", "Category",
     "Is_Retruth", "Is_Reply", "RetruthedPostKey",
-    "HasMedia", "HasHashtags", "HasExternalURLS", "HasMentions",
-    "TextLength", "WordCount", "HasQuotes",
+    "TextLength", "WordCount",
 )
 MEDIA_COLUMNS = (
     "MediaKey", "SourceMediaID", "MediaURL", "MediaFormat", "EstimatedSize",
@@ -91,8 +90,8 @@ def build_media(rows, main_keys):
     return media_by_id.values(), sorted(attachments), unlinked
 
 
-def post_rows(rows, post_keys, main_keys, user_keys, categories, observed):
-    yield (0, "", 0, "", "", "Unknown", "", "", "", "", "", "", "", "", "", "")
+def post_rows(rows, post_keys, main_keys, categories):
+    yield (0, "", "", "", "", "Unknown", "", "", "", "", "")
 
     for row in rows:
         integrated_id = row["id"]
@@ -111,18 +110,13 @@ def post_rows(rows, post_keys, main_keys, user_keys, categories, observed):
         yield (
             post_key,
             integrated_id,
-            user_keys.get(row["author"], 0),
+            row["author"],
             timestamp[:10],
             timestamp[11:],
             categories.get(integrated_id, "Unclassified"),
             is_retruth,
             is_reply,
             retruthed_key,
-            int(post_key in observed["media"]),
-            int(post_key in observed["hashtags"]),
-            int(post_key in observed["urls"]),
-            int(bool(MENTION_PATTERN.search(text))) if has_text else "",
             len(text) if has_text else "",
             len(WORD_PATTERN.findall(text)) if has_text else "",
-            int(post_key in observed["quotes"]),
         )

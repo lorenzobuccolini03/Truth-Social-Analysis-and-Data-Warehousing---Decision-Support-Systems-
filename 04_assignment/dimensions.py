@@ -3,7 +3,7 @@ from datetime import timedelta
 
 DATE_COLUMNS = (
     "DateKey", "FullDate", "Day", "Month", "Year",
-    "DayofWeek", "IsWeekend", "Season",
+    "DayofWeek", "Season",
 )
 TIME_COLUMNS = ("TimeKey", "Hour", "Minute", "DayPeriod")
 EVENT_TYPE_COLUMNS = ("EventTypeKey", "EventTypeCode", "EventTypeName")
@@ -19,7 +19,7 @@ SEASON_BY_MONTH = (
 
 
 def date_rows(start_date, end_date):
-    yield (0, "", "", "", "", "", "", "Unknown")
+    yield (0, "", "", "", "", "", "Unknown")
 
     current = start_date
     while current <= end_date:
@@ -33,7 +33,6 @@ def date_rows(start_date, end_date):
             current.month,
             current.year,
             weekday,
-            int(weekday >= 6),
             SEASON_BY_MONTH[current.month - 1],
         )
         current += timedelta(days=1)

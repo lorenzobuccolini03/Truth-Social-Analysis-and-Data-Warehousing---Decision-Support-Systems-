@@ -17,7 +17,6 @@ BEGIN TRY
         [Month] TINYINT NULL,
         [Year] SMALLINT NULL,
         DayofWeek TINYINT NULL,
-        IsWeekend BIT NULL,
         Season VARCHAR(10) NOT NULL,
         CONSTRAINT PK_DimDate_python PRIMARY KEY (DateKey)
     );
@@ -53,26 +52,17 @@ BEGIN TRY
     CREATE TABLE dbo.DimPost_python (
         PostKey INT NOT NULL,
         IntegratedPostID BIGINT NULL,
-        PostAuthorUserKey INT NOT NULL,
+        SourceAuthorID BIGINT NULL,
         PublicationDate DATE NULL,
         PublicationTime TIME(0) NULL,
         Category NVARCHAR(255) NOT NULL,
         Is_Retruth BIT NULL,
         Is_Reply BIT NULL,
         RetruthedPostKey INT NULL,
-        HasMedia BIT NULL,
-        HasHashtags BIT NULL,
-        HasExternalURLS BIT NULL,
-        HasMentions BIT NULL,
         TextLength INT NULL,
         WordCount INT NULL,
-        HasQuotes BIT NULL,
         CONSTRAINT PK_DimPost_python PRIMARY KEY (PostKey),
-        CONSTRAINT UQ_DimPost_python_IntegratedPostID UNIQUE (IntegratedPostID),
-        CONSTRAINT FK_DimPost_python_Author
-            FOREIGN KEY (PostAuthorUserKey) REFERENCES dbo.DimUser_python (UserKey),
-        CONSTRAINT FK_DimPost_python_RetruthedPost
-            FOREIGN KEY (RetruthedPostKey) REFERENCES dbo.DimPost_python (PostKey)
+        CONSTRAINT UQ_DimPost_python_IntegratedPostID UNIQUE (IntegratedPostID)
     );
 
     CREATE TABLE dbo.DimMedia_python (
@@ -104,10 +94,8 @@ BEGIN TRY
         EventDateKey INT NOT NULL,
         EventTimekey SMALLINT NOT NULL,
         EventTypeKey TINYINT NOT NULL,
-        EventCount TINYINT NOT NULL,
         CONSTRAINT PK_FactEvent_python PRIMARY KEY (EventKey),
         CONSTRAINT UQ_FactEvent_python_SourceEventID UNIQUE (SourceEventID),
-        CONSTRAINT CK_FactEvent_python_EventCount CHECK (EventCount = 1),
         CONSTRAINT FK_FactEvent_python_Post
             FOREIGN KEY (PostKey) REFERENCES dbo.DimPost_python (PostKey),
         CONSTRAINT FK_FactEvent_python_Actor
@@ -130,7 +118,6 @@ BEGIN TRY
         [Month] TINYINT NULL,
         [Year] SMALLINT NULL,
         DayofWeek TINYINT NULL,
-        IsWeekend BIT NULL,
         Season VARCHAR(10) NOT NULL,
         CONSTRAINT PK_DimDate_IS PRIMARY KEY (DateKey)
     );
@@ -166,26 +153,17 @@ BEGIN TRY
     CREATE TABLE dbo.DimPost_IS (
         PostKey INT NOT NULL,
         IntegratedPostID BIGINT NULL,
-        PostAuthorUserKey INT NOT NULL,
+        SourceAuthorID BIGINT NULL,
         PublicationDate DATE NULL,
         PublicationTime TIME(0) NULL,
         Category NVARCHAR(255) NOT NULL,
         Is_Retruth BIT NULL,
         Is_Reply BIT NULL,
         RetruthedPostKey INT NULL,
-        HasMedia BIT NULL,
-        HasHashtags BIT NULL,
-        HasExternalURLS BIT NULL,
-        HasMentions BIT NULL,
         TextLength INT NULL,
         WordCount INT NULL,
-        HasQuotes BIT NULL,
         CONSTRAINT PK_DimPost_IS PRIMARY KEY (PostKey),
-        CONSTRAINT UQ_DimPost_IS_IntegratedPostID UNIQUE (IntegratedPostID),
-        CONSTRAINT FK_DimPost_IS_Author
-            FOREIGN KEY (PostAuthorUserKey) REFERENCES dbo.DimUser_IS (UserKey),
-        CONSTRAINT FK_DimPost_IS_RetruthedPost
-            FOREIGN KEY (RetruthedPostKey) REFERENCES dbo.DimPost_IS (PostKey)
+        CONSTRAINT UQ_DimPost_IS_IntegratedPostID UNIQUE (IntegratedPostID)
     );
 
     CREATE TABLE dbo.DimMedia_IS (
@@ -217,10 +195,8 @@ BEGIN TRY
         EventDateKey INT NOT NULL,
         EventTimekey SMALLINT NOT NULL,
         EventTypeKey TINYINT NOT NULL,
-        EventCount TINYINT NOT NULL,
         CONSTRAINT PK_FactEvent_IS PRIMARY KEY (EventKey),
         CONSTRAINT UQ_FactEvent_IS_SourceEventID UNIQUE (SourceEventID),
-        CONSTRAINT CK_FactEvent_IS_EventCount CHECK (EventCount = 1),
         CONSTRAINT FK_FactEvent_IS_Post
             FOREIGN KEY (PostKey) REFERENCES dbo.DimPost_IS (PostKey),
         CONSTRAINT FK_FactEvent_IS_Actor

@@ -1,6 +1,6 @@
 FACT_COLUMNS = (
     "EventKey", "SourceEventID", "PostKey", "ActorUserKey", "PostAuthorUserKey",
-    "EventDateKey", "EventTimekey", "EventTypeKey", "EventCount",
+    "EventDateKey", "EventTimeKey", "EventTypeKey",
 )
 
 
@@ -14,7 +14,7 @@ def build_arff_post_keys(rows, post_keys):
 
 def fact_rows(rows, main_keys, arff_keys, user_keys, post_rows, event_type_rows):
     post_authors = {
-        int(row["PostKey"]): int(row["PostAuthorUserKey"])
+        int(row["PostKey"]): user_keys.get(row["SourceAuthorID"], 0)
         for row in post_rows
     }
     event_types = {
@@ -60,7 +60,6 @@ def fact_rows(rows, main_keys, arff_keys, user_keys, post_rows, event_type_rows)
             date_key,
             time_key,
             event_types[row["event_type"]],
-            1,
         )
 
     print(f"Eventi con PostKey Unknown: {unknown_posts}")

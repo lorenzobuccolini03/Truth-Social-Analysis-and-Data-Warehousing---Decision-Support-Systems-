@@ -88,22 +88,12 @@ def export_posts_and_media():
     media_file = SOURCE_DIR / "output_media" / "media_clean.csv.gz"
     media_rows, attachments, unlinked = posts.build_media(read_csv(media_file), main_keys)
 
-    observed = {"media": {post_key for post_key, _ in attachments}}
-    sources = (
-        ("hashtags", "output_hashtags/hashtags_clean.csv.gz", "truth_id"),
-        ("urls", "output_external_urls/external_urls_clean.csv.gz", "truth_id"),
-        ("quotes", "output_quotes/quotes_clean.csv", "quoting_truth"),
-    )
-    for name, filename, id_column in sources:
-        observed[name] = posts.linked_post_keys(
-            read_csv(SOURCE_DIR / filename), id_column, main_keys
-        )
 
     write_csv(
         OUTPUT_DIR / "DimPost.csv",
         posts.POST_COLUMNS,
         posts.post_rows(
-            read_csv(POSTS_FILE), post_keys, main_keys, user_keys, categories, observed
+            read_csv(POSTS_FILE), post_keys, main_keys, categories
         ),
     )
     write_csv(OUTPUT_DIR / "DimMedia.csv", posts.MEDIA_COLUMNS, media_rows)
