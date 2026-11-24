@@ -1,66 +1,55 @@
 FACT_COLUMNS = (
-    "EventKey", "SourceEventID", "PostKey", "ActorUserKey", "PostAuthorUserKey",
-    "EventDateKey", "EventTimeKey", "EventTypeKey",
+    "SourceEventID", "IntegratedPostID", "ActorSourceUserID", "PostAuthorSourceUserID",
+    "EventDate", "EventHour", "EventMinute", "EventTypeCode",
 )
 
 
-def build_arff_post_keys(rows, post_keys):
-    return {
-        row["arff_truth_id"]: post_keys[row["integrated_truth_id"]]
-        for row in rows
-        if row["integrated_truth_id"]
-    }
+def build_arff_post_ids(rows, post_ids):
+    arff_ids = {}
+    for row in rows:
+        integrated_id = row["integrated_truth_id"]
+        if not integrated_id:
+            continue
+        if integrated_id not in post_ids:
+            raise ValueError(f"ID integrato ARFF assente dai post: {integrated_id}")
+        arff_ids[row["arff_truth_id"]] = integrated_id
+    return arff_ids
 
 
-def fact_rows(rows, main_keys, arff_keys, user_keys, post_rows, event_type_rows):
-    post_authors = {
-        int(row["PostKey"]): user_keys.get(row["SourceAuthorID"], 0)
-        for row in post_rows
-    }
-    event_types = {
-        row["EventTypeCode"]: int(row["EventTypeKey"])
-        for row in event_type_rows
-    }
-
+def fact_rows(rows, main_ids, arff_ids, post_authors, event_type_codes):
     seen_events = set()
-    unknown_actors = 0
     unknown_posts = 0
 
-    for event_key, row in enumerate(rows, start=1):
+    for row in rows:
         source_event_id = row["event_id"]
         if not source_event_id or source_event_id in seen_events:
             raise ValueError(f"ID evento mancante o duplicato: {source_event_id!r}")
         seen_events.add(source_event_id)
 
         source_post_id = row["truth_id"]
-        main_key = main_keys.get(source_post_id)
-        arff_key = arff_keys.get(source_post_id)
-        if main_key and arff_key and main_key != arff_key:
+        main_id = main_ids.get(source_post_id)
+        arff_id = arff_ids.get(source_post_id)
+        if main_id and arff_id and main_id != arff_id:
             raise ValueError(f"Riferimento ambiguo al post {source_post_id}")
 
-        post_key = main_key or arff_key or 0
-        actor_key = user_keys.get(row["user_id"], 0)
-        unknown_posts += int(post_key == 0)
-        unknown_actors += int(actor_key == 0)
+        integrated_id = main_id or arff_id
+        unknown_posts += int(integrated_id is None)
+        event_type = row["event_type"]
+        if event_type not in event_type_codes:
+            raise ValueError(f"Tipo evento sconosciuto: {event_type!r}")
 
         timestamp = row["timestamp"]
-        date_key = int(timestamp[:10].replace("-", "")) if timestamp else 0
-        time_key = -1
-        if len(timestamp) >= 16:
-            hour = int(timestamp[11:13])
-            minute = int(timestamp[14:16])
-            time_key = hour * 100 + minute
+        hour, minute = (timestamp[11:13], timestamp[14:16]) if len(timestamp) >= 16 else ("", "")
 
         yield (
-            event_key,
             source_event_id,
-            post_key,
-            actor_key,
-            post_authors[post_key],
-            date_key,
-            time_key,
-            event_types[row["event_type"]],
+            integrated_id,
+            row["user_id"],
+            post_authors.get(integrated_id),
+            timestamp[:10],
+            hour,
+            minute,
+            event_type,
         )
 
-    print(f"Eventi con PostKey Unknown: {unknown_posts}")
-    print(f"Eventi con ActorUserKey Unknown: {unknown_actors}")
+    print(f"Eventi con post non risolto: {unknown_posts}")

@@ -11,26 +11,28 @@ BEGIN TRY
 
     -- Tabelle _python
     CREATE TABLE dbo.DimDate_python (
-        DateKey INT NOT NULL,
+        DateKey INT IDENTITY(1,1) NOT NULL,
         FullDate DATE NULL,
         [Day] TINYINT NULL,
         [Month] TINYINT NULL,
         [Year] SMALLINT NULL,
         DayofWeek TINYINT NULL,
         Season VARCHAR(10) NOT NULL,
-        CONSTRAINT PK_DimDate_python PRIMARY KEY (DateKey)
+        CONSTRAINT PK_DimDate_python PRIMARY KEY (DateKey),
+        CONSTRAINT UQ_DimDate_python_Source UNIQUE (FullDate)
     );
 
     CREATE TABLE dbo.DimTime_python (
-        TimeKey SMALLINT NOT NULL,
+        TimeKey SMALLINT IDENTITY(1,1) NOT NULL,
         [Hour] TINYINT NULL,
         [Minute] TINYINT NULL,
         DayPeriod VARCHAR(10) NOT NULL,
-        CONSTRAINT PK_DimTime_python PRIMARY KEY (TimeKey)
+        CONSTRAINT PK_DimTime_python PRIMARY KEY (TimeKey),
+        CONSTRAINT UQ_DimTime_python_Source UNIQUE ([Hour], [Minute])
     );
 
     CREATE TABLE dbo.DimEventType_python (
-        EventTypeKey TINYINT NOT NULL,
+        EventTypeKey TINYINT IDENTITY(1,1) NOT NULL,
         EventTypeCode VARCHAR(3) NOT NULL,
         EventTypeName VARCHAR(20) NOT NULL,
         CONSTRAINT PK_DimEventType_python PRIMARY KEY (EventTypeKey),
@@ -38,7 +40,7 @@ BEGIN TRY
     );
 
     CREATE TABLE dbo.DimUser_python (
-        UserKey INT NOT NULL,
+        UserKey INT IDENTITY(1,1) NOT NULL,
         SourceUserID BIGINT NULL,
         Username NVARCHAR(255) NULL,
         FollowersCount BIGINT NULL,
@@ -50,9 +52,8 @@ BEGIN TRY
     );
 
     CREATE TABLE dbo.DimPost_python (
-        PostKey INT NOT NULL,
+        PostKey INT IDENTITY(1,1) NOT NULL,
         IntegratedPostID BIGINT NULL,
-        SourceAuthorID BIGINT NULL,
         PublicationDate DATE NULL,
         PublicationTime TIME(0) NULL,
         Category NVARCHAR(255) NOT NULL,
@@ -61,38 +62,19 @@ BEGIN TRY
         RetruthedPostKey INT NULL,
         TextLength INT NULL,
         WordCount INT NULL,
+        EstimatedMediaSize INT NULL, -- KB
         CONSTRAINT PK_DimPost_python PRIMARY KEY (PostKey),
         CONSTRAINT UQ_DimPost_python_IntegratedPostID UNIQUE (IntegratedPostID)
     );
 
-    CREATE TABLE dbo.DimMedia_python (
-        MediaKey INT NOT NULL,
-        SourceMediaID BIGINT NOT NULL,
-        MediaURL NVARCHAR(2048) NULL,
-        MediaFormat VARCHAR(10) NOT NULL,
-        EstimatedSize INT NULL, -- KB
-        CONSTRAINT PK_DimMedia_python PRIMARY KEY (MediaKey),
-        CONSTRAINT UQ_DimMedia_python_SourceMediaID UNIQUE (SourceMediaID)
-    );
-
-    CREATE TABLE dbo.BridgePostMedia_python (
-        PostKey INT NOT NULL,
-        MediaKey INT NOT NULL,
-        CONSTRAINT PK_BridgePostMedia_python PRIMARY KEY (PostKey, MediaKey),
-        CONSTRAINT FK_BridgePostMedia_python_Post
-            FOREIGN KEY (PostKey) REFERENCES dbo.DimPost_python (PostKey),
-        CONSTRAINT FK_BridgePostMedia_python_Media
-            FOREIGN KEY (MediaKey) REFERENCES dbo.DimMedia_python (MediaKey)
-    );
-
     CREATE TABLE dbo.FactEvent_python (
-        EventKey BIGINT NOT NULL,
+        EventKey BIGINT IDENTITY(1,1) NOT NULL,
         SourceEventID BIGINT NOT NULL,
         PostKey INT NOT NULL,
         ActorUserKey INT NOT NULL,
         PostAuthorUserKey INT NOT NULL,
         EventDateKey INT NOT NULL,
-        EventTimekey SMALLINT NOT NULL,
+        EventTimeKey SMALLINT NOT NULL,
         EventTypeKey TINYINT NOT NULL,
         CONSTRAINT PK_FactEvent_python PRIMARY KEY (EventKey),
         CONSTRAINT UQ_FactEvent_python_SourceEventID UNIQUE (SourceEventID),
@@ -105,33 +87,35 @@ BEGIN TRY
         CONSTRAINT FK_FactEvent_python_Date
             FOREIGN KEY (EventDateKey) REFERENCES dbo.DimDate_python (DateKey),
         CONSTRAINT FK_FactEvent_python_Time
-            FOREIGN KEY (EventTimekey) REFERENCES dbo.DimTime_python (TimeKey),
+            FOREIGN KEY (EventTimeKey) REFERENCES dbo.DimTime_python (TimeKey),
         CONSTRAINT FK_FactEvent_python_Type
             FOREIGN KEY (EventTypeKey) REFERENCES dbo.DimEventType_python (EventTypeKey)
     );
 
     -- Tabelle _IS
     CREATE TABLE dbo.DimDate_IS (
-        DateKey INT NOT NULL,
+        DateKey INT IDENTITY(1,1) NOT NULL,
         FullDate DATE NULL,
         [Day] TINYINT NULL,
         [Month] TINYINT NULL,
         [Year] SMALLINT NULL,
         DayofWeek TINYINT NULL,
         Season VARCHAR(10) NOT NULL,
-        CONSTRAINT PK_DimDate_IS PRIMARY KEY (DateKey)
+        CONSTRAINT PK_DimDate_IS PRIMARY KEY (DateKey),
+        CONSTRAINT UQ_DimDate_IS_Source UNIQUE (FullDate)
     );
 
     CREATE TABLE dbo.DimTime_IS (
-        TimeKey SMALLINT NOT NULL,
+        TimeKey SMALLINT IDENTITY(1,1) NOT NULL,
         [Hour] TINYINT NULL,
         [Minute] TINYINT NULL,
         DayPeriod VARCHAR(10) NOT NULL,
-        CONSTRAINT PK_DimTime_IS PRIMARY KEY (TimeKey)
+        CONSTRAINT PK_DimTime_IS PRIMARY KEY (TimeKey),
+        CONSTRAINT UQ_DimTime_IS_Source UNIQUE ([Hour], [Minute])
     );
 
     CREATE TABLE dbo.DimEventType_IS (
-        EventTypeKey TINYINT NOT NULL,
+        EventTypeKey TINYINT IDENTITY(1,1) NOT NULL,
         EventTypeCode VARCHAR(3) NOT NULL,
         EventTypeName VARCHAR(20) NOT NULL,
         CONSTRAINT PK_DimEventType_IS PRIMARY KEY (EventTypeKey),
@@ -139,7 +123,7 @@ BEGIN TRY
     );
 
     CREATE TABLE dbo.DimUser_IS (
-        UserKey INT NOT NULL,
+        UserKey INT IDENTITY(1,1) NOT NULL,
         SourceUserID BIGINT NULL,
         Username NVARCHAR(255) NULL,
         FollowersCount BIGINT NULL,
@@ -151,9 +135,8 @@ BEGIN TRY
     );
 
     CREATE TABLE dbo.DimPost_IS (
-        PostKey INT NOT NULL,
+        PostKey INT IDENTITY(1,1) NOT NULL,
         IntegratedPostID BIGINT NULL,
-        SourceAuthorID BIGINT NULL,
         PublicationDate DATE NULL,
         PublicationTime TIME(0) NULL,
         Category NVARCHAR(255) NOT NULL,
@@ -162,38 +145,19 @@ BEGIN TRY
         RetruthedPostKey INT NULL,
         TextLength INT NULL,
         WordCount INT NULL,
+        EstimatedMediaSize INT NULL, -- KB
         CONSTRAINT PK_DimPost_IS PRIMARY KEY (PostKey),
         CONSTRAINT UQ_DimPost_IS_IntegratedPostID UNIQUE (IntegratedPostID)
     );
 
-    CREATE TABLE dbo.DimMedia_IS (
-        MediaKey INT NOT NULL,
-        SourceMediaID BIGINT NOT NULL,
-        MediaURL NVARCHAR(2048) NULL,
-        MediaFormat VARCHAR(10) NOT NULL,
-        EstimatedSize INT NULL, -- KB
-        CONSTRAINT PK_DimMedia_IS PRIMARY KEY (MediaKey),
-        CONSTRAINT UQ_DimMedia_IS_SourceMediaID UNIQUE (SourceMediaID)
-    );
-
-    CREATE TABLE dbo.BridgePostMedia_IS (
-        PostKey INT NOT NULL,
-        MediaKey INT NOT NULL,
-        CONSTRAINT PK_BridgePostMedia_IS PRIMARY KEY (PostKey, MediaKey),
-        CONSTRAINT FK_BridgePostMedia_IS_Post
-            FOREIGN KEY (PostKey) REFERENCES dbo.DimPost_IS (PostKey),
-        CONSTRAINT FK_BridgePostMedia_IS_Media
-            FOREIGN KEY (MediaKey) REFERENCES dbo.DimMedia_IS (MediaKey)
-    );
-
     CREATE TABLE dbo.FactEvent_IS (
-        EventKey BIGINT NOT NULL,
+        EventKey BIGINT IDENTITY(1,1) NOT NULL,
         SourceEventID BIGINT NOT NULL,
         PostKey INT NOT NULL,
         ActorUserKey INT NOT NULL,
         PostAuthorUserKey INT NOT NULL,
         EventDateKey INT NOT NULL,
-        EventTimekey SMALLINT NOT NULL,
+        EventTimeKey SMALLINT NOT NULL,
         EventTypeKey TINYINT NOT NULL,
         CONSTRAINT PK_FactEvent_IS PRIMARY KEY (EventKey),
         CONSTRAINT UQ_FactEvent_IS_SourceEventID UNIQUE (SourceEventID),
@@ -206,7 +170,7 @@ BEGIN TRY
         CONSTRAINT FK_FactEvent_IS_Date
             FOREIGN KEY (EventDateKey) REFERENCES dbo.DimDate_IS (DateKey),
         CONSTRAINT FK_FactEvent_IS_Time
-            FOREIGN KEY (EventTimekey) REFERENCES dbo.DimTime_IS (TimeKey),
+            FOREIGN KEY (EventTimeKey) REFERENCES dbo.DimTime_IS (TimeKey),
         CONSTRAINT FK_FactEvent_IS_Type
             FOREIGN KEY (EventTypeKey) REFERENCES dbo.DimEventType_IS (EventTypeKey)
     );
@@ -225,8 +189,8 @@ FROM sys.tables AS t
 WHERE t.schema_id = SCHEMA_ID(N'dbo')
   AND t.name IN (
       N'DimDate_python', N'DimTime_python', N'DimEventType_python', N'DimUser_python',
-      N'DimPost_python', N'DimMedia_python', N'BridgePostMedia_python', N'FactEvent_python',
+      N'DimPost_python', N'FactEvent_python',
       N'DimDate_IS', N'DimTime_IS', N'DimEventType_IS', N'DimUser_IS',
-      N'DimPost_IS', N'DimMedia_IS', N'BridgePostMedia_IS', N'FactEvent_IS'
+      N'DimPost_IS', N'FactEvent_IS'
   )
 ORDER BY NomeTabella;

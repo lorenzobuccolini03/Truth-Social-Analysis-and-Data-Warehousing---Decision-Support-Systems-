@@ -1,5 +1,5 @@
-EventTypeKey,EventTypeCode,EventTypeName
-1,CR,Creation
-2,LI,Like
-3,RET,Retruth
-4,REP,Reply
+EventTypeCode,EventTypeName
+CR,Creation
+LI,Like
+RET,Retruth
+REP,Reply

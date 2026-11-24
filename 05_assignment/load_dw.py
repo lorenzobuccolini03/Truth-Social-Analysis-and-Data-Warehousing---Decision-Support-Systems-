@@ -14,13 +14,13 @@ BATCH_SIZE = 2000
 
 TABLES = (
     "DimDate", "DimTime", "DimEventType", "DimUser",
-    "DimMedia", "DimPost", "BridgePostMedia", "FactEvent",
+    "DimPost", "FactEvent",
 )
 TEXT_COLUMNS = {
     "Season", "DayPeriod", "EventTypeCode", "EventTypeName",
-    "Username", "Category", "MediaURL", "MediaFormat",
+    "Username", "Category",
 }
-DATE_COLUMNS = {"FullDate", "AccountCreationDate", "PublicationDate"}
+DATE_COLUMNS = {"FullDate", "AccountCreationDate", "PublicationDate", "EventDate"}
 
 
 def convert_value(column, value):
@@ -46,20 +46,77 @@ def execute_batches(cursor, sql, rows):
     return total
 
 
-def load_table(cursor, table, path):
+def insert_rows(cursor, table, columns, rows):
+    names = ", ".join(f"[{name.replace(']', ']]')}]" for name in columns)
+    parameters = ", ".join("?" for _ in columns)
+    sql = f"INSERT INTO dbo.[{table}_python] ({names}) VALUES ({parameters})"
+    return execute_batches(cursor, sql, rows)
+
+
+def read_rows(path):
+    with path.open(encoding="utf-8-sig", newline="") as file:
+        for row in csv.DictReader(file):
+            yield {name: convert_value(name, value) for name, value in row.items()}
+
+
+def load_dimension(cursor, table, path):
+    # SQL Server generates the primary key. DimPost references are resolved after the insert.
     with path.open(encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
-        columns = reader.fieldnames
+        columns = tuple(name for name in reader.fieldnames if name != "RetruthedIntegratedPostID")
+        rows = (tuple(convert_value(col, row[col]) for col in columns) for row in reader)
+        return insert_rows(cursor, table, columns, rows)
 
-        names = ", ".join(f"[{name.replace(']', ']]')}]" for name in columns)
-        parameters = ", ".join("?" for _ in columns)
-        sql = f"INSERT INTO dbo.[{table}_python] ({names}) VALUES ({parameters})"
 
-        rows = (
-            tuple(convert_value(column, row[column]) for column in columns)
-            for row in reader
+def read_key_map(cursor, table, key, *source_columns):
+    columns = ", ".join(f"[{name}]" for name in source_columns)
+    cursor.execute(f"SELECT {columns}, [{key}] FROM dbo.[{table}_python]")
+    return {tuple(row[:-1]): row[-1] for row in cursor}
+
+
+def link_retruths(cursor, path, post_keys):
+    updates = (
+        (post_keys[(row["RetruthedIntegratedPostID"],)], post_keys[(row["IntegratedPostID"],)])
+        for row in read_rows(path)
+        if row["RetruthedIntegratedPostID"] is not None
+    )
+    return execute_batches(
+        cursor, "UPDATE dbo.DimPost_python SET RetruthedPostKey = ? WHERE PostKey = ?", updates
+    )
+
+
+def load_events(cursor, path, post_keys):
+    user_keys = read_key_map(cursor, "DimUser", "UserKey", "SourceUserID")
+    date_keys = read_key_map(cursor, "DimDate", "DateKey", "FullDate")
+    time_keys = read_key_map(cursor, "DimTime", "TimeKey", "Hour", "Minute")
+    type_keys = read_key_map(cursor, "DimEventType", "EventTypeKey", "EventTypeCode")
+    unknown_user = user_keys[(None,)]
+
+    columns = (
+        "SourceEventID", "PostKey", "ActorUserKey", "PostAuthorUserKey",
+        "EventDateKey", "EventTimeKey", "EventTypeKey",
+    )
+    rows = (
+        (
+            row["SourceEventID"],
+            post_keys[(row["IntegratedPostID"],)],
+            user_keys.get((row["ActorSourceUserID"],), unknown_user),
+            user_keys.get((row["PostAuthorSourceUserID"],), unknown_user),
+            date_keys[(row["EventDate"],)],
+            time_keys[(row["EventHour"], row["EventMinute"])],
+            type_keys[(row["EventTypeCode"],)],
         )
-        return execute_batches(cursor, sql, rows)
+        for row in read_rows(path)
+    )
+    return insert_rows(cursor, "FactEvent", columns, rows)
+
+
+def verify_identity_columns(cursor):
+    for table in TABLES:
+        key = table.removeprefix("Dim").removeprefix("Fact") + "Key"
+        cursor.execute("SELECT COLUMNPROPERTY(OBJECT_ID(?), ?, 'IsIdentity')", f"dbo.{table}_python", key)
+        if cursor.fetchone()[0] != 1:
+            raise RuntimeError(f"Schema da aggiornare: dbo.{table}_python.{key} deve essere IDENTITY.")
 
 
 def main():
@@ -79,7 +136,7 @@ def main():
     password = getpass("Password SQL del gruppo: ").replace("}", "}}")
     connection_string = (
         f"DRIVER={{{driver}}};SERVER=tcp:{SERVER};DATABASE={DATABASE};"
-        f"UID={USERNAME};PWD={{{password}}};Encrypt=yes;TrustServerCertificate=no;"
+        f"UID={USERNAME};PWD={{{password}}};Encrypt=yes;TrustServerCertificate=yes;"
     )
     connection = pyodbc.connect(connection_string, autocommit=False)
 
@@ -93,6 +150,7 @@ def main():
             return
 
         cursor.execute("SET XACT_ABORT ON")
+        verify_identity_columns(cursor)
 
         for table in TABLES:
             cursor.execute(
@@ -106,7 +164,12 @@ def main():
         for table in TABLES:
             print(f"Caricamento di {table}_python...", flush=True)
             path = args.csv_dir / f"{table}.csv"
-            count = load_table(cursor, table, path)
+            if table == "FactEvent":
+                post_keys = read_key_map(cursor, "DimPost", "PostKey", "IntegratedPostID")
+                link_retruths(cursor, args.csv_dir / "DimPost.csv", post_keys)
+                count = load_events(cursor, path, post_keys)
+            else:
+                count = load_dimension(cursor, table, path)
             print(f"{count:,} righe inviate.", flush=True)
 
         connection.commit()

@@ -4,119 +4,103 @@ from urllib.parse import urlsplit
 
 
 POST_COLUMNS = (
-    "PostKey", "IntegratedPostID", "SourceAuthorID",
+    "IntegratedPostID",
     "PublicationDate", "PublicationTime", "Category",
-    "Is_Retruth", "Is_Reply", "RetruthedPostKey",
-    "TextLength", "WordCount",
+    "Is_Retruth", "Is_Reply", "RetruthedIntegratedPostID",
+    "TextLength", "WordCount", "EstimatedMediaSize",
 )
-MEDIA_COLUMNS = (
-    "MediaKey", "SourceMediaID", "MediaURL", "MediaFormat", "EstimatedSize",
-)
-BRIDGE_COLUMNS = ("PostKey", "MediaKey")
 
 WORD_PATTERN = re.compile(r"\b\w+\b")
-MENTION_PATTERN = re.compile(r"(?<![\w/])@[A-Za-z0-9_]+")
 SIZE_KB = {"JPG": 400, "PNG": 2000, "GIF": 10000}
 BOOLEAN_VALUES = {"true": 1, "t": 1, "1": 1, "false": 0, "f": 0, "0": 0, "": ""}
 
 
-def build_post_keys(rows):
-    post_keys = {}
+def index_post_authors(rows):
+    post_authors = {}
 
-    for post_key, row in enumerate(rows, start=1):
+    for row in rows:
         integrated_id = row["id"]
-        if not integrated_id or integrated_id in post_keys:
+        if not integrated_id or integrated_id in post_authors:
             raise ValueError(f"ID integrato mancante o duplicato: {integrated_id!r}")
-        post_keys[integrated_id] = post_key
+        post_authors[integrated_id] = row["author"]
 
-    return post_keys
+    return post_authors
 
 
-def build_main_post_keys(post_keys, arff_rows, alias_rows):
+def build_main_post_ids(post_ids, arff_rows, alias_rows):
     new_arff_ids = {
         row["integrated_truth_id"]
         for row in arff_rows
         if row["mapping_status"] == "new_post"
     }
-    main_keys = {
-        post_id: post_key
-        for post_id, post_key in post_keys.items()
+    main_ids = {
+        post_id: post_id
+        for post_id in post_ids
         if post_id not in new_arff_ids
     }
 
     for row in alias_rows:
-        canonical_key = main_keys[row["canonical_id"]]
+        canonical_id = main_ids[row["canonical_id"]]
         original_id = row["original_id"]
-        existing_key = main_keys.setdefault(original_id, canonical_key)
-        if existing_key != canonical_key:
+        existing_id = main_ids.setdefault(original_id, canonical_id)
+        if existing_id != canonical_id:
             raise ValueError(f"Mapping incompatibile per il post {original_id}")
 
-    return main_keys
+    return main_ids
 
 
-def linked_post_keys(rows, id_column, main_keys):
-    return {
-        main_keys[row[id_column]]
-        for row in rows
-        if row[id_column] in main_keys
-    }
-
-
-def build_media(rows, main_keys):
-    media_by_id = {}
-    attachments = set()
+def estimate_media_by_post(rows, main_ids):
+    size_by_media = {}
+    seen_attachments = set()
+    size_by_post = {}
     unlinked = 0
 
     for row in rows:
         media_id = row["id_media"]
-        url = row["media_url"]
-
-        if media_id not in media_by_id:
-            extension = PurePosixPath(urlsplit(url).path).suffix.upper()
+        if media_id not in size_by_media:
+            extension = PurePosixPath(urlsplit(row["media_url"]).path).suffix.upper()
             media_format = "JPG" if extension == ".JPEG" else extension[1:]
-            size = SIZE_KB.get(media_format, "")
-            media_key = len(media_by_id) + 1
-            media_by_id[media_id] = (
-                media_key, media_id, url, media_format if size else "Unknown", size,
-            )
+            size_by_media[media_id] = SIZE_KB.get(media_format)
 
-        post_key = main_keys.get(row["truth_id"])
-        if post_key is None:
+        integrated_id = main_ids.get(row["truth_id"])
+        if integrated_id is None:
             unlinked += 1
-        else:
-            media_key = media_by_id[media_id][0]
-            attachments.add((post_key, media_key))
+            continue
 
-    return media_by_id.values(), sorted(attachments), unlinked
+        size = size_by_media[media_id]
+        attachment = (integrated_id, media_id)
+        if size is not None and attachment not in seen_attachments:
+            seen_attachments.add(attachment)
+            size_by_post[integrated_id] = size_by_post.get(integrated_id, 0) + size
+
+    return size_by_post, unlinked
 
 
-def post_rows(rows, post_keys, main_keys, categories):
-    yield (0, "", "", "", "", "Unknown", "", "", "", "", "")
+def post_rows(rows, main_ids, categories, media_sizes):
+    yield ("", "", "", "Unknown", "", "", "", "", "", "")
 
     for row in rows:
         integrated_id = row["id"]
-        post_key = post_keys[integrated_id]
         timestamp = row["timestamp"]
         is_retruth = BOOLEAN_VALUES[row["is_retruth"].strip().lower()]
         is_reply = BOOLEAN_VALUES[row["is_reply"].strip().lower()]
 
-        retruthed_key = ""
+        retruthed_id = ""
         if is_retruth == 1:
-            retruthed_key = main_keys.get(row["truth_retruthed"], "")
+            retruthed_id = main_ids.get(row["truth_retruthed"], "")
 
         text = row["text"]
         has_text = bool(text.strip())
 
         yield (
-            post_key,
             integrated_id,
-            row["author"],
             timestamp[:10],
             timestamp[11:],
             categories.get(integrated_id, "Unclassified"),
             is_retruth,
             is_reply,
-            retruthed_key,
+            retruthed_id,
             len(text) if has_text else "",
             len(WORD_PATTERN.findall(text)) if has_text else "",
+            media_sizes.get(integrated_id),
         )
