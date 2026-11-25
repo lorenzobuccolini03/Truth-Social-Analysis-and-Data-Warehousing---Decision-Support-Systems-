@@ -59,7 +59,7 @@ def write_csv(path, header, rows):
 
 
 def export_posts_and_media():
-    post_authors = posts.index_post_authors(read_csv(POSTS_FILE))
+    post_authors, retruth_references = posts.index_posts(read_csv(POSTS_FILE))
     alias_file = SOURCE_DIR / "truth_id_map.csv"
 
     aliases = read_csv(alias_file) if alias_file.is_file() else ()
@@ -67,6 +67,9 @@ def export_posts_and_media():
         print("Mappa degli alias assente: uso i collegamenti main diretti.")
 
     main_ids = posts.build_main_post_ids(post_authors, read_csv(ARFF_MAPPING_FILE), aliases)
+    retruth_flags = posts.classify_retruths(
+        retruth_references, main_ids, post_authors, dimensions.TRUMP_SOURCE_USER_ID
+    )
 
     category_file = ASSIGNMENT_DIR.parent / "02_assignment" / "output" / "post_categories.csv"
     categories = {}
@@ -80,13 +83,13 @@ def export_posts_and_media():
         print("Categorie dell'Assignment 2 assenti: Category = Unclassified.")
 
     media_file = SOURCE_DIR / "output_media" / "media_clean.csv.gz"
-    media_sizes, unlinked = posts.estimate_media_by_post(read_csv(media_file), main_ids)
+    media_counts, unlinked = posts.count_media_by_post(read_csv(media_file), main_ids)
 
     write_csv(
         OUTPUT_DIR / "DimPost.csv",
         posts.POST_COLUMNS,
         posts.post_rows(
-            read_csv(POSTS_FILE), main_ids, categories, media_sizes
+            read_csv(POSTS_FILE), main_ids, categories, media_counts, retruth_flags
         ),
     )
     print(f"Associazioni media senza post risolto: {unlinked}")
@@ -108,11 +111,6 @@ def main():
         dimensions.time_rows(),
     )
     write_csv(
-        OUTPUT_DIR / "DimEventType.csv",
-        dimensions.EVENT_TYPE_COLUMNS,
-        dimensions.event_type_rows(),
-    )
-    write_csv(
         OUTPUT_DIR / "DimUser.csv",
         dimensions.USER_COLUMNS,
         dimensions.user_rows(read_csv(USERS_FILE)),
@@ -129,7 +127,6 @@ def main():
             main_ids=main_ids,
             arff_ids=arff_ids,
             post_authors=post_authors,
-            event_type_codes={code for code, _ in dimensions.event_type_rows()},
         ),
     )
 

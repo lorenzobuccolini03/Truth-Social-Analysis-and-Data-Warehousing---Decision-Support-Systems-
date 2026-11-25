@@ -3,6 +3,8 @@ FACT_COLUMNS = (
     "EventDate", "EventHour", "EventMinute", "EventTypeCode",
 )
 
+EVENT_TYPE_CODES = {"CR", "LI", "RET", "REP"}
+
 
 def build_arff_post_ids(rows, post_ids):
     arff_ids = {}
@@ -16,7 +18,7 @@ def build_arff_post_ids(rows, post_ids):
     return arff_ids
 
 
-def fact_rows(rows, main_ids, arff_ids, post_authors, event_type_codes):
+def fact_rows(rows, main_ids, arff_ids, post_authors):
     seen_events = set()
     unknown_posts = 0
 
@@ -35,7 +37,7 @@ def fact_rows(rows, main_ids, arff_ids, post_authors, event_type_codes):
         integrated_id = main_id or arff_id
         unknown_posts += int(integrated_id is None)
         event_type = row["event_type"]
-        if event_type not in event_type_codes:
+        if event_type not in EVENT_TYPE_CODES:
             raise ValueError(f"Tipo evento sconosciuto: {event_type!r}")
 
         timestamp = row["timestamp"]

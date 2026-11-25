@@ -6,11 +6,12 @@ DATE_COLUMNS = (
     "DayofWeek", "Season",
 )
 TIME_COLUMNS = ("Hour", "Minute", "DayPeriod")
-EVENT_TYPE_COLUMNS = ("EventTypeCode", "EventTypeName")
 USER_COLUMNS = (
     "SourceUserID", "Username", "FollowersCount",
     "FollowingCount", "AccountCreationDate", "IsDonaldTrump",
 )
+
+TRUMP_SOURCE_USER_ID = 27
 
 SEASON_BY_MONTH = (
     "Winter", "Winter", "Spring", "Spring", "Spring", "Summer",
@@ -45,13 +46,6 @@ def time_rows():
             yield (hour, minute, period)
 
 
-def event_type_rows():
-    yield ("CR", "Creation")
-    yield ("LI", "Like")
-    yield ("RET", "Retruth")
-    yield ("REP", "Reply")
-
-
 def user_rows(source_rows):
     yield ("", "Unknown", "", "", "", 0)
 
@@ -63,5 +57,5 @@ def user_rows(source_rows):
             row["follower_count"],
             row["following_count"],
             row["timestamp_user_creation"],
-            int(source_user_id == 27),
+            int(source_user_id == TRUMP_SOURCE_USER_ID),
         )

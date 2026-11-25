@@ -26,17 +26,10 @@ BEGIN TRY
         TimeKey SMALLINT IDENTITY(1,1) NOT NULL,
         [Hour] TINYINT NULL,
         [Minute] TINYINT NULL,
+        FullTime AS (TIMEFROMPARTS([Hour], [Minute], 0, 0, 0)),
         DayPeriod VARCHAR(10) NOT NULL,
         CONSTRAINT PK_DimTime_python PRIMARY KEY (TimeKey),
         CONSTRAINT UQ_DimTime_python_Source UNIQUE ([Hour], [Minute])
-    );
-
-    CREATE TABLE dbo.DimEventType_python (
-        EventTypeKey TINYINT IDENTITY(1,1) NOT NULL,
-        EventTypeCode VARCHAR(3) NOT NULL,
-        EventTypeName VARCHAR(20) NOT NULL,
-        CONSTRAINT PK_DimEventType_python PRIMARY KEY (EventTypeKey),
-        CONSTRAINT UQ_DimEventType_python_Code UNIQUE (EventTypeCode)
     );
 
     CREATE TABLE dbo.DimUser_python (
@@ -60,9 +53,12 @@ BEGIN TRY
         Is_Retruth BIT NULL,
         Is_Reply BIT NULL,
         RetruthedPostKey INT NULL,
+        IsRetruthOfTrump BIT NULL, -- 1: Trump; 0: altro autore verificato; NULL: irrisolto o non applicabile
         TextLength INT NULL,
         WordCount INT NULL,
-        EstimatedMediaSize INT NULL, -- KB
+        PNGCount INT NULL,
+        JPGCount INT NULL,
+        GIFCount INT NULL,
         CONSTRAINT PK_DimPost_python PRIMARY KEY (PostKey),
         CONSTRAINT UQ_DimPost_python_IntegratedPostID UNIQUE (IntegratedPostID)
     );
@@ -75,7 +71,9 @@ BEGIN TRY
         PostAuthorUserKey INT NOT NULL,
         EventDateKey INT NOT NULL,
         EventTimeKey SMALLINT NOT NULL,
-        EventTypeKey TINYINT NOT NULL,
+        EventTypeCode VARCHAR(3) NOT NULL,
+        CONSTRAINT CK_FactEvent_python_EventTypeCode
+            CHECK (EventTypeCode IN ('CR', 'LI', 'RET', 'REP')),
         CONSTRAINT PK_FactEvent_python PRIMARY KEY (EventKey),
         CONSTRAINT UQ_FactEvent_python_SourceEventID UNIQUE (SourceEventID),
         CONSTRAINT FK_FactEvent_python_Post
@@ -87,9 +85,7 @@ BEGIN TRY
         CONSTRAINT FK_FactEvent_python_Date
             FOREIGN KEY (EventDateKey) REFERENCES dbo.DimDate_python (DateKey),
         CONSTRAINT FK_FactEvent_python_Time
-            FOREIGN KEY (EventTimeKey) REFERENCES dbo.DimTime_python (TimeKey),
-        CONSTRAINT FK_FactEvent_python_Type
-            FOREIGN KEY (EventTypeKey) REFERENCES dbo.DimEventType_python (EventTypeKey)
+            FOREIGN KEY (EventTimeKey) REFERENCES dbo.DimTime_python (TimeKey)
     );
 
     -- Tabelle _IS
@@ -109,17 +105,10 @@ BEGIN TRY
         TimeKey SMALLINT IDENTITY(1,1) NOT NULL,
         [Hour] TINYINT NULL,
         [Minute] TINYINT NULL,
+        FullTime AS (TIMEFROMPARTS([Hour], [Minute], 0, 0, 0)),
         DayPeriod VARCHAR(10) NOT NULL,
         CONSTRAINT PK_DimTime_IS PRIMARY KEY (TimeKey),
         CONSTRAINT UQ_DimTime_IS_Source UNIQUE ([Hour], [Minute])
-    );
-
-    CREATE TABLE dbo.DimEventType_IS (
-        EventTypeKey TINYINT IDENTITY(1,1) NOT NULL,
-        EventTypeCode VARCHAR(3) NOT NULL,
-        EventTypeName VARCHAR(20) NOT NULL,
-        CONSTRAINT PK_DimEventType_IS PRIMARY KEY (EventTypeKey),
-        CONSTRAINT UQ_DimEventType_IS_Code UNIQUE (EventTypeCode)
     );
 
     CREATE TABLE dbo.DimUser_IS (
@@ -143,9 +132,12 @@ BEGIN TRY
         Is_Retruth BIT NULL,
         Is_Reply BIT NULL,
         RetruthedPostKey INT NULL,
+        IsRetruthOfTrump BIT NULL, -- 1: Trump; 0: altro autore verificato; NULL: irrisolto o non applicabile
         TextLength INT NULL,
         WordCount INT NULL,
-        EstimatedMediaSize INT NULL, -- KB
+        PNGCount INT NULL,
+        JPGCount INT NULL,
+        GIFCount INT NULL,
         CONSTRAINT PK_DimPost_IS PRIMARY KEY (PostKey),
         CONSTRAINT UQ_DimPost_IS_IntegratedPostID UNIQUE (IntegratedPostID)
     );
@@ -158,7 +150,9 @@ BEGIN TRY
         PostAuthorUserKey INT NOT NULL,
         EventDateKey INT NOT NULL,
         EventTimeKey SMALLINT NOT NULL,
-        EventTypeKey TINYINT NOT NULL,
+        EventTypeCode VARCHAR(3) NOT NULL,
+        CONSTRAINT CK_FactEvent_IS_EventTypeCode
+            CHECK (EventTypeCode IN ('CR', 'LI', 'RET', 'REP')),
         CONSTRAINT PK_FactEvent_IS PRIMARY KEY (EventKey),
         CONSTRAINT UQ_FactEvent_IS_SourceEventID UNIQUE (SourceEventID),
         CONSTRAINT FK_FactEvent_IS_Post
@@ -170,9 +164,7 @@ BEGIN TRY
         CONSTRAINT FK_FactEvent_IS_Date
             FOREIGN KEY (EventDateKey) REFERENCES dbo.DimDate_IS (DateKey),
         CONSTRAINT FK_FactEvent_IS_Time
-            FOREIGN KEY (EventTimeKey) REFERENCES dbo.DimTime_IS (TimeKey),
-        CONSTRAINT FK_FactEvent_IS_Type
-            FOREIGN KEY (EventTypeKey) REFERENCES dbo.DimEventType_IS (EventTypeKey)
+            FOREIGN KEY (EventTimeKey) REFERENCES dbo.DimTime_IS (TimeKey)
     );
 
     COMMIT TRANSACTION;
@@ -188,9 +180,9 @@ SELECT SCHEMA_NAME(t.schema_id) AS NomeSchema, t.name AS NomeTabella
 FROM sys.tables AS t
 WHERE t.schema_id = SCHEMA_ID(N'dbo')
   AND t.name IN (
-      N'DimDate_python', N'DimTime_python', N'DimEventType_python', N'DimUser_python',
+      N'DimDate_python', N'DimTime_python', N'DimUser_python',
       N'DimPost_python', N'FactEvent_python',
-      N'DimDate_IS', N'DimTime_IS', N'DimEventType_IS', N'DimUser_IS',
+      N'DimDate_IS', N'DimTime_IS', N'DimUser_IS',
       N'DimPost_IS', N'FactEvent_IS'
   )
 ORDER BY NomeTabella;

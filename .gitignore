@@ -2,3 +2,7 @@ Project_Data/
 Additional_Data/
 .ipynb_checkpoints/
 __pycache__/
+
+/06_assignment/events_sample.partial.sqlite3*
+
+/06_assignment/events_sample.json

@@ -1,5 +1,6 @@
 import json
-from contextlib import suppress
+import sqlite3
+from contextlib import closing, suppress
 from getpass import getpass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,7 +11,7 @@ SERVER = "131.114.50.57"
 DATABASE = "ProjectAdditionalData2627"
 USERNAME = "Group_ID_25"
 BATCH_SIZE = 2000
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 5
 RETRYABLE_STATES = {"08S01", "08001", "HYT00", "HYT01"}
 OUTPUT = Path(__file__).with_name("events_sample.json")
 
@@ -62,44 +63,97 @@ def read_events(connect, odbc_error, output):
                         connection.close()
                     connection = None
                 print(f"Connessione interrotta ({exc.args[0]}). Riprovo la stessa query.", flush=True)
-                sleep(2 * attempt)
+                sleep(min(15 * attempt, 60))
 
+    partial = output.with_suffix(".partial.sqlite3")
     try:
-        print("Conteggio degli eventi sul server...", flush=True)
-        _, rows = query(COUNT_QUERY)
-        total, distinct_ids, upper_id = rows[0]
-        if total != distinct_ids:
-            raise ValueError("event_id contiene valori mancanti o duplicati.")
+        with closing(sqlite3.connect(partial, timeout=0)) as checkpoint:
+            checkpoint.execute("PRAGMA locking_mode = EXCLUSIVE")
+            checkpoint.execute("BEGIN EXCLUSIVE")
+            checkpoint.execute("""
+                CREATE TABLE IF NOT EXISTS progress (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    source TEXT NOT NULL,
+                    total INTEGER NOT NULL,
+                    upper_id INTEGER,
+                    downloaded INTEGER NOT NULL,
+                    last_id INTEGER
+                )
+            """)
+            checkpoint.execute("""
+                CREATE TABLE IF NOT EXISTS pages (
+                    last_id INTEGER PRIMARY KEY,
+                    contents TEXT NOT NULL
+                )
+            """)
+            checkpoint.commit()
 
-        target = (total + 19) // 20
-        print(f"Obiettivo: {target:,} eventi su {total:,}.", flush=True)
-        last_id = None
-        downloaded = 0
+            source_name = f"{SERVER}/{DATABASE}/dbo.events"
+            state = checkpoint.execute(
+                "SELECT source, total, upper_id, downloaded, last_id FROM progress WHERE id = 1"
+            ).fetchone()
+            if state is None:
+                print("Conteggio degli eventi sul server...", flush=True)
+                _, rows = query(COUNT_QUERY)
+                total, distinct_ids, upper_id = rows[0]
+                if total != distinct_ids:
+                    raise ValueError("event_id contiene valori mancanti o duplicati.")
+                if upper_id is not None:
+                    upper_id = int(upper_id)
+                downloaded, last_id = 0, None
+                with checkpoint:
+                    checkpoint.execute(
+                        "INSERT INTO progress VALUES (1, ?, ?, ?, ?, ?)",
+                        (source_name, total, upper_id, downloaded, last_id),
+                    )
+            else:
+                saved_source, total, upper_id, downloaded, last_id = state
+                if saved_source != source_name:
+                    raise ValueError(f"Il download parziale appartiene a {saved_source}.")
 
-        with TemporaryDirectory(dir=output.parent) as folder:
-            temporary_file = Path(folder) / output.name
-            with temporary_file.open("w", encoding="utf-8", newline="\n") as file:
-                file.write("[")
-                while downloaded < target:
-                    limit = min(BATCH_SIZE, target - downloaded)
-                    if last_id is None:
-                        columns, rows = query(FIRST_PAGE, (limit, upper_id))
-                    else:
-                        columns, rows = query(NEXT_PAGE, (limit, last_id, upper_id))
-                    if len(rows) != limit:
-                        raise RuntimeError("La sorgente è cambiata durante il download.")
+            target = (total + 19) // 20
+            print(f"Obiettivo: {target:,} eventi su {total:,}.", flush=True)
+            if downloaded:
+                print(f"Riprendo da {downloaded:,} eventi già salvati.", flush=True)
 
-                    id_column = next(i for i, name in enumerate(columns) if name.lower() == "event_id")
-                    for row in rows:
-                        file.write(",\n" if downloaded else "\n")
-                        json.dump(dict(zip(columns, row)), file, ensure_ascii=False, default=str)
-                        downloaded += 1
-                    last_id = rows[-1][id_column]
-                    if downloaded == len(rows) or downloaded % 20_000 == 0 or downloaded == target:
-                        print(f"{downloaded:,} / {target:,} eventi scaricati.", flush=True)
+            while downloaded < target:
+                limit = min(BATCH_SIZE, target - downloaded)
+                if last_id is None:
+                    columns, rows = query(FIRST_PAGE, (limit, upper_id))
+                else:
+                    columns, rows = query(NEXT_PAGE, (limit, last_id, upper_id))
+                if len(rows) != limit:
+                    raise RuntimeError("La sorgente è cambiata durante il download.")
 
-                file.write("\n]\n")
-            temporary_file.replace(output)
+                id_column = next(i for i, name in enumerate(columns) if name.lower() == "event_id")
+                last_id = int(rows[-1][id_column])
+                contents = ",\n".join(
+                    json.dumps(dict(zip(columns, row)), ensure_ascii=False, default=str)
+                    for row in rows
+                )
+                with checkpoint:
+                    checkpoint.execute("INSERT INTO pages VALUES (?, ?)", (last_id, contents))
+                    downloaded += len(rows)
+                    checkpoint.execute(
+                        "UPDATE progress SET downloaded = ?, last_id = ? WHERE id = 1",
+                        (downloaded, last_id),
+                    )
+                if downloaded == len(rows) or downloaded % 20_000 == 0 or downloaded == target:
+                    print(f"{downloaded:,} / {target:,} eventi salvati.", flush=True)
+
+            with TemporaryDirectory(dir=output.parent) as folder:
+                temporary_file = Path(folder) / output.name
+                with temporary_file.open("w", encoding="utf-8", newline="\n") as file:
+                    file.write("[")
+                    separator = "\n"
+                    for (contents,) in checkpoint.execute("SELECT contents FROM pages ORDER BY last_id"):
+                        file.write(separator)
+                        file.write(contents)
+                        separator = ",\n"
+                    file.write("\n]\n")
+                temporary_file.replace(output)
+
+        partial.unlink()
         return downloaded
     finally:
         if connection is not None:
